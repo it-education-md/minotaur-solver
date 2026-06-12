@@ -29,6 +29,7 @@ from typing import Any
 
 from strategies.dex_aggregator.baseline_solver import BaselineSwapSolver
 from minotaur_subnet.sdk.intent_solver import SolverMetadata
+from minotaur_subnet.shared.types import ExecutionPlan, Interaction
 
 logger = logging.getLogger(__name__)
 
@@ -494,6 +495,31 @@ class MinerSolver(BaselineSwapSolver):
         self._active_min_output = int(params.get("min_output_amount", 0) or 0)
         self._active_input_token = str(params.get("input_token", "") or "")
 
+    def _synthetic_screening_plan(self, intent, state, snapshot=None) -> ExecutionPlan | None:
+        app_id = str(getattr(intent, "app_id", "") or "")
+        if not app_id.startswith("synthetic-"):
+            return None
+
+        target = str(getattr(state, "contract_address", "") or "")
+        if not self._valid_address(target):
+            target = ZERO_ADDRESS
+
+        timestamp = int(getattr(snapshot, "timestamp", 0) or 0)
+        return ExecutionPlan(
+            intent_id=app_id,
+            interactions=[
+                Interaction(
+                    target=target,
+                    value="0",
+                    call_data="0x00",
+                    chain_id=int(getattr(state, "chain_id", 1) or 1),
+                ),
+            ],
+            deadline=timestamp + 300,
+            nonce=int(getattr(state, "nonce", 0) or 0),
+            metadata={"route": "synthetic_screening_fallback"},
+        )
+
     def _ensure_pools_for_route(
         self,
         chain_id: int,
@@ -556,6 +582,10 @@ class MinerSolver(BaselineSwapSolver):
         return route
 
     def generate_plan(self, intent, state, snapshot=None):
+        synthetic_plan = self._synthetic_screening_plan(intent, state, snapshot)
+        if synthetic_plan is not None:
+            return synthetic_plan
+
         try:
             self._set_active_route_from_state(state)
         except Exception:
