@@ -69,6 +69,20 @@ EXTRA_INTERMEDIARIES: dict[int, tuple[str, ...]] = {
 ENABLE_EXTRA_INTERMEDIARIES = os.environ.get(
     "MINOTAUR_ENABLE_EXTRA_INTERMEDIARIES", "",
 ).strip().lower() in {"1", "true", "yes", "on"}
+BASELINE_INTERMEDIARIES: dict[int, tuple[str, ...]] = {
+    1: (
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    ),
+    31337: (
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    ),
+    8453: (
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    ),
+}
 
 
 class MinerSolver(BaselineSwapSolver):
@@ -165,12 +179,20 @@ class MinerSolver(BaselineSwapSolver):
         if not self._should_search_extra_intermediaries(chain_id):
             return []
         extras: list[str] = []
-        known = {addr.lower() for addr in super()._intermediaries_for_chain(chain_id)}
+        known = {addr.lower() for addr in self._baseline_intermediaries_for_chain(chain_id)}
         for addr in EXTRA_INTERMEDIARIES.get(chain_id, ()):
             if addr.lower() not in known:
                 extras.append(addr)
                 known.add(addr.lower())
         return extras
+
+    def _baseline_intermediaries_for_chain(self, chain_id: int) -> list[str]:
+        try:
+            return list(super()._intermediaries_for_chain(chain_id))
+        except ModuleNotFoundError as exc:
+            if exc.name == "web3":
+                return list(BASELINE_INTERMEDIARIES.get(chain_id, ()))
+            raise
 
     def _should_search_extra_intermediaries(self, chain_id: int) -> bool:
         if self._suppress_extra_intermediaries:
@@ -190,7 +212,7 @@ class MinerSolver(BaselineSwapSolver):
         return amount_in >= threshold
 
     def _intermediaries_for_chain(self, chain_id: int) -> list[str]:
-        mids = list(super()._intermediaries_for_chain(chain_id))
+        mids = self._baseline_intermediaries_for_chain(chain_id)
         if not self._should_search_extra_intermediaries(chain_id):
             return mids
 
@@ -519,6 +541,18 @@ class MinerSolver(BaselineSwapSolver):
             nonce=int(getattr(state, "nonce", 0) or 0),
             metadata={"route": "synthetic_screening_fallback"},
         )
+
+    def _derive_prices(
+        self,
+        pool_states: dict[str, dict[str, Any]],
+        chain_id: int,
+    ) -> dict[str, float]:
+        try:
+            return super()._derive_prices(pool_states, chain_id)
+        except ModuleNotFoundError as exc:
+            if exc.name == "web3":
+                return {}
+            raise
 
     def _ensure_pools_for_route(
         self,
