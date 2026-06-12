@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import time
-
+from common.abi_utils import encode_approve
 from strategies.dex_aggregator.v3_codec import (
-    encode_approve,
     encode_exact_input,
     encode_exact_input_single,
     encode_swap_path,
@@ -28,6 +26,7 @@ WETH_ADDRESS: dict[int, str] = {
 FEE_TIERS = [3000, 500, 10000, 100]
 DEFAULT_FEE = 3000
 DEADLINE_BUFFER = 300
+DETERMINISTIC_FALLBACK_TIMESTAMP = 2_000_000_000
 
 
 def is_valid_address(addr: object) -> bool:
@@ -40,10 +39,15 @@ def compute_deadline(
     *,
     buffer_seconds: int = DEADLINE_BUFFER,
 ) -> int:
-    """Compute a deadline from the market snapshot or wall clock."""
+    """Compute a deterministic deadline from the market snapshot.
+
+    The main solver paths pass a ProcessorContext timestamp directly, but
+    this helper is still used by older code paths. Avoiding wall-clock time
+    keeps validator replays reproducible when a pinned snapshot is present.
+    """
     if snapshot is not None and snapshot.timestamp > 0:
         return snapshot.timestamp + buffer_seconds
-    return int(time.time()) + buffer_seconds
+    return DETERMINISTIC_FALLBACK_TIMESTAMP + buffer_seconds
 
 
 def get_uniswap_v3_router(
