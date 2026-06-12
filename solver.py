@@ -43,7 +43,9 @@ ZERO_ADDRESS = "0x" + "0" * 40
 HINT_SHORT_CIRCUIT_BPS = 9_500
 EXTRA_ROUTE_MODEL_MARGIN_BPS = 25
 EXTRA_ROUTE_EXTRA_HOP_COST_BPS = 600
-GAS_AWARE_MIN_OUTPUT_BPS = 9_950
+# Validator min-out is pinned near the incumbent/champion output. Keep gas
+# selection to effectively equal-output routes so gas never buys a hard zero.
+GAS_AWARE_MIN_OUTPUT_BPS = 9_998
 GAS_ESTIMATE_SINGLE_HOP = 430_000
 GAS_ESTIMATE_AERO_SINGLE_HOP_PREMIUM = 15_000
 GAS_ESTIMATE_EXTRA_HOP = 120_000
